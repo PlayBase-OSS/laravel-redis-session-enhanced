@@ -155,9 +155,9 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         return $this;
     }
 
-    public function setExists(bool $value): self
+    public function setExists($value): self
     {
-        $this->exists = $value;
+        $this->exists = (bool) $value;
         return $this;
     }
 
