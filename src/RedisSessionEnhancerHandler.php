@@ -2,8 +2,11 @@
 
 namespace Craftsys\LaravelRedisSessionEnhanced;
 
+use Exception;
 use Illuminate\Cache\RedisStore;
 use Illuminate\Contracts\Auth\Guard;
+use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Session\CacheBasedSessionHandler;
 use Illuminate\Session\ExistenceAwareInterface;
 use Illuminate\Support\Carbon;
@@ -12,79 +15,76 @@ use Illuminate\Redis\Connections\PhpRedisConnection;
 use Illuminate\Redis\Connections\PredisConnection;
 use Illuminate\Support\Collection;
 
-class RedisSessionEnhancerHandler
-    extends CacheBasedSessionHandler
-    implements ExistenceAwareInterface
+readonly class SessionData
+{
+    public function __construct(
+        public string $id,
+        public mixed $user_id,
+        public string $ip_address,
+        public string $user_agent,
+        public int $last_activity,
+        public string $payload,
+    ) {}
+}
+
+class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements ExistenceAwareInterface
 {
     use InteractsWithTime;
 
-    /**
-     * The container instance.
-     *
-     * @var \Illuminate\Contracts\Container\Container|null
-     */
-    protected $container;
+    protected bool $exists = false;
 
-    /**
-     * The existence state of the session.
-     *
-     * @var bool
-     */
-    protected $exists;
+    public function __construct(
+        $cache,
+        $minutes,
+        protected ?Container $container = null,
+    ) {
+        parent::__construct($cache, $minutes);
+    }
 
-    /**
-     * {@inheritdoc}
-     *
-     * @return string|false
-     */
     public function read($sessionId): string
     {
-        $raw_data = parent::read($sessionId);
+        $rawData = parent::read($sessionId);
 
-        if (!$raw_data) {
+        if (!$rawData) {
             return '';
         }
 
-        try {
-            $session = json_decode($raw_data, true);
-        } catch (\Exception $e) {
+        $session = $this->parseSessionData($rawData);
+        
+        if ($session === null) {
             return '';
         }
 
         if ($this->expired($session)) {
             $this->exists = true;
-
             return '';
         }
 
         if (isset($session['payload'])) {
             $this->exists = true;
-            return base64_decode($session['payload']) ?: '';
+            return base64_decode($session['payload'], true) ?: '';
         }
 
         return '';
     }
 
-    /**
-     * Determine if the session is expired.
-     *
-     * @param  array  $session
-     * @return bool
-     */
-    protected function expired($session): bool
+    protected function parseSessionData(string $rawData): ?array
     {
-        return isset($session['last_activity']) &&
-            $session['last_activity'] <
-                Carbon::now()
-                    ->subMinutes($this->minutes)
-                    ->getTimestamp();
+        try {
+            return json_decode($rawData, true, flags: JSON_THROW_ON_ERROR);
+        } catch (Exception) {
+            return null;
+        }
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * @return bool
-     */
+    protected function expired(array $session): bool
+    {
+        return isset($session['last_activity']) 
+            && $session['last_activity'] < Carbon::now()
+                ->subMinutes($this->minutes)
+                ->getTimestamp();
+    }
+
     public function write($sessionId, $data): bool
     {
         $payload = $this->getDefaultPayload($data);
@@ -98,13 +98,7 @@ class RedisSessionEnhancerHandler
         return $this->exists = true;
     }
 
-    /**
-     * Get the default payload for the session.
-     *
-     * @param  string  $data
-     * @return array
-     */
-    protected function getDefaultPayload($data): array
+    protected function getDefaultPayload(string $data): array
     {
         $payload = [
             'payload' => base64_encode($data),
@@ -115,165 +109,113 @@ class RedisSessionEnhancerHandler
             return $payload;
         }
 
-        return tap($payload, function (&$payload) {
-            $this->addUserInformation($payload)->addRequestInformation(
-                $payload
-            );
-        });
+        $this->addUserInformation($payload);
+        $this->addRequestInformation($payload);
+
+        return $payload;
     }
 
-    /**
-     * Add the user information to the session payload.
-     *
-     * @param  array  $payload
-     * @return $this
-     */
-    protected function addUserInformation(&$payload): self
+    protected function addUserInformation(array &$payload): void
     {
-        if ($this->container->bound(Guard::class)) {
+        if ($this->container?->bound(Guard::class)) {
             $payload['user_id'] = $this->userId();
         }
-
-        return $this;
     }
 
-    /**
-     * Get the currently authenticated user's ID.
-     *
-     * @return mixed
-     */
-    protected function userId()
+    protected function userId(): mixed
     {
-        return $this->container->make(Guard::class)->id();
+        return $this->container?->make(Guard::class)->id();
     }
 
-    /**
-     * Add the request information to the session payload.
-     *
-     * @param  array  $payload
-     * @return $this
-     */
-    protected function addRequestInformation(&$payload): self
+    protected function addRequestInformation(array &$payload): void
     {
-        if ($this->container->bound('request')) {
-            $payload = array_merge($payload, [
-                'ip_address' => $this->ipAddress(),
-                'user_agent' => $this->userAgent(),
-            ]);
+        if ($this->container?->bound('request')) {
+            $payload['ip_address'] = $this->ipAddress();
+            $payload['user_agent'] = $this->userAgent();
         }
-
-        return $this;
     }
 
-    /**
-     * Get the IP address for the current request.
-     *
-     * @return string|null
-     */
     protected function ipAddress(): ?string
     {
-        return $this->container->make('request')->ip();
+        return $this->container?->make('request')->ip();
     }
 
-    /**
-     * Get the user agent for the current request.
-     *
-     * @return string
-     */
     protected function userAgent(): string
     {
         return substr(
-            (string) $this->container->make('request')->header('User-Agent'),
+            (string) $this->container?->make('request')->header('User-Agent'),
             0,
             500
         );
     }
 
-    /**
-     * Set the application instance used by the handler.
-     *
-     * @param  \Illuminate\Contracts\Foundation\Application  $container
-     * @return $this
-     */
-    public function setContainer($container): self
+    public function setContainer(Application $container): self
     {
         $this->container = $container;
-
         return $this;
     }
 
-    /**
-     * Set the existence state for the session.
-     *
-     * @param  bool  $value
-     * @return $this
-     */
-    public function setExists($value): self
+    public function setExists(bool $value): self
     {
         $this->exists = $value;
-
         return $this;
     }
 
     public function readAll(): Collection
     {
-        /** @var RedisStore */
+        /** @var RedisStore $store */
         $store = $this->cache->getStore();
-
         $connection = $store->connection();
-        // Connections can have a global prefix...
-        $connectionPrefix = '';
-        // all keys are prefixed with connection prefix and cache prefix
-        switch (true) {
-            case $connection instanceof PhpRedisConnection:
-                /** @var PhpRedisConnection $connection */
-                $connectionPrefix = $connection->_prefix('');
-                break;
-            case $connection instanceof PredisConnection:
-                /** @var PredisConnection $connection */
-                $connectionPrefix = $connection->getOptions()->prefix ?: '';
-                break;
-            default:
-                $connectionPrefix = '';
-                break;
-        }
-
-        // create the prefix using connection prefix and cache store prefix
-        $prefix = $connectionPrefix . $store->getPrefix();
-
-        // 1. now get all the keys from connection
-        $keys = $connection->command('keys', ['*']);
-        // remove the prefix from the keys
-        $keys = array_map(function ($key) use ($prefix) {
-            return str_replace($prefix, '', $key);
-        }, $keys);
-
-        // 2. load the data for each keys
+        
+        $prefix = $this->getFullPrefix($connection, $store);
+        $keys = $this->getSessionKeys($connection, $prefix);
         $data = $store->many($keys);
 
-        $active_sessions = [];
-        foreach ($data as $session_id => $data) {
-            if (!$data) {
-                continue;
-            }
-            // try to parse the session data
-            try {
-                $parsed_data = json_decode($data, true);
-                $active_sessions[] = (object) [
-                    'id' => $session_id,
-                    'user_id' => $parsed_data['user_id'],
-                    'ip_address' => $parsed_data['ip_address'],
-                    'user_agent' => $parsed_data['user_agent'],
-                    'last_activity' => $parsed_data['last_activity'],
-                    'payload' => $parsed_data['payload'],
-                ];
-            } catch (\Exception $e) {
-                // ignore the errors
-                continue;
-            }
-        }
+        return collect($data)
+            ->filter()
+            ->map(fn(string $sessionData, string $sessionId) => 
+                $this->parseSessionObject($sessionId, $sessionData)
+            )
+            ->filter();
+    }
 
-        return collect($active_sessions);
+    protected function getFullPrefix(mixed $connection, RedisStore $store): string
+    {
+        $connectionPrefix = match (true) {
+            $connection instanceof PhpRedisConnection => $connection->_prefix(''),
+            $connection instanceof PredisConnection => $connection->getOptions()->prefix ?: '',
+            default => '',
+        };
+
+        return $connectionPrefix . $store->getPrefix();
+    }
+
+    protected function getSessionKeys(mixed $connection, string $prefix): array
+    {
+        $keys = $connection->command('keys', ['*']);
+        
+        return array_map(
+            fn(string $key) => str_replace($prefix, '', $key),
+            $keys
+        );
+    }
+
+    protected function parseSessionObject(string $sessionId, string $data): ?SessionData
+    {
+        try {
+            $parsed = json_decode($data, true, flags: JSON_THROW_ON_ERROR);
+            
+            return new SessionData(
+                id: $sessionId,
+                user_id: $parsed['user_id'] ?? null,
+                ip_address: $parsed['ip_address'] ?? '',
+                user_agent: $parsed['user_agent'] ?? '',
+                last_activity: $parsed['last_activity'] ?? 0,
+                payload: $parsed['payload'] ?? '',
+            );
+        } catch (Exception) {
+            return null;
+        }
     }
 
     public function destroyAll(): bool
