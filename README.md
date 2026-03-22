@@ -1,131 +1,156 @@
-# Laravel Redis Session Enhanced Driver
+# Laravel Redis Session Enhanced
 
 <p>
-<a href="https://packagist.org/packages/craftsys/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/dt/craftsys/laravel-redis-session-enhanced" alt="Total Downloads" /></a>
-<a href="https://packagist.org/packages/craftsys/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/v/craftsys/laravel-redis-session-enhanced?label=version" alt="Latest Stable Version" /></a>
-<a href="https://packagist.org/packages/craftsys/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/l/craftsys/laravel-redis-session-enhanced" alt="License" /></a>
-<a href="https://github.com/craftsys/laravel-redis-session-enhanced/actions/workflows/test.yml"><img src="https://github.com/craftsys/laravel-redis-session-enhanced/actions/workflows/test.yml/badge.svg" alt="Status" /></a>
+<a href="https://packagist.org/packages/playbase-oss/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/dt/playbase-oss/laravel-redis-session-enhanced" alt="Total Downloads" /></a>
+<a href="https://packagist.org/packages/playbase-oss/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/v/playbase-oss/laravel-redis-session-enhanced?label=version" alt="Latest Stable Version" /></a>
+<a href="https://packagist.org/packages/playbase-oss/laravel-redis-session-enhanced"><img src="https://img.shields.io/packagist/l/playbase-oss/laravel-redis-session-enhanced" alt="License" /></a>
+<a href="https://github.com/PlayBase-OSS/laravel-redis-session-enhanced/actions/workflows/test.yml"><img src="https://github.com/PlayBase-OSS/laravel-redis-session-enhanced/actions/workflows/test.yml/badge.svg" alt="Status" /></a>
 </p>
 
+A Redis session driver for Laravel that stores rich session metadata — `user_id`, `ip_address`, `user_agent`, and `last_activity` — alongside the session payload. This gives you the same session management capabilities as Laravel's database driver, but backed by Redis.
 
-The [Laravel's Database Session Driver](https://laravel.com/docs/session#database) manages sessions in the Database which associates following attributes (along with the payload) with every session update: `user_id`, `ip_address`, `user_agent`, and `last_activty`. These attributes can be accessed and modified to provide following capabilities to your customers
+**Use this if you want to:**
+- Track active sessions per user
+- Implement "logout from other devices"
+- Force-logout users (individually or all at once)
+- Prevent concurrent sessions
 
-- Track Active Sessions
-- Remove Other Sessions (Logout from other devices)
-- Allow Admins to force logout some/everyone
-- Block Multiple Sessions
+## Requirements
 
-But with the Database driver, **every request to your application will do a Database update** to sessions table to track the latest session information, specifically, the `last_activty` attribute. This database update is required to validate unauthenticated requests if the session becomes inactive for the configured `SESSION_LIFETIME`. These session updates on every requests are fast and should not have much performance impact on your request time. But, if you ARE facing performance issues and want to store the session in the redis cache, you can go the [Laravel's Redis Session Driver](https://laravel.com/docs/session#redis). The redis driver will store and validate the session automatically but you will loose the above mentioned capabilities for your customers (tracking, logouts etc.).
-
-If you want to have similar capabilities as the Database Session driver but want to use Redis for session storage, this project is for you.
-
-
-## Table of Contents
-
--   [Installation](#installation)
--   [Configuration](#configuration)
--   [Usage](#usage)
+- PHP `^8.2`
+- Laravel `^11.0 | ^12.0`
+- Redis configured in your Laravel application
 
 ## Installation
 
-The packages is available on [Packagist](https://packagist.org/packages/craftsys/laravel-redis-session-enhanced) and can be installed via [Composer](https://getcomposer.org/) by executing following command in shell.
-
 ```bash
-composer require craftsys/laravel-redis-session-enhanced
+composer require playbase-oss/laravel-redis-session-enhanced
 ```
 
-**prerequisite**
-
--   php^7.1
--   laravel^5|^6|^7|^8|^9|^10|^11
--   redis installed and configured for laravel
-
-The package is tested for 5.8+,^6.0,^7.0,^8.0,^9.0,^10.0,^11.0 only.
-
-### Laravel 5.5+
-
-If you're using Laravel 5.5 or above, the package will automatically register the `Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancedServiceProvider` provider.
-
-### Laravel 5.4 and below
-
-Add `Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancedServiceProvider` to the `providers` array in your `config/app.php`:
-
-```php
-'providers' => [
-     // Other service providers...
-     Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancedServiceProvider::class,
-],
-```
+The service provider is auto-discovered via Laravel's package discovery.
 
 ## Configuration
 
-The package usage your existing configuration files and requires following modification in configs and env file.
+**1. Add a dedicated Redis connection for sessions in `config/database.php`:**
 
-
-1. Add a new connection named `session` in your `config/database.php` redis configuration
 ```php
-[
-  'redis' => [
-     // ... existing configuration
-     // Add new connection for session
-     'session' => [
-        'host' => env('REDIS_HOST', '127.0.0.1'),
+'redis' => [
+    // ... existing connections
+
+    'session' => [
+        'host'     => env('REDIS_HOST', '127.0.0.1'),
         'password' => env('REDIS_PASSWORD', null),
-        'port' => env('REDIS_PORT', 6379),
-        // new DB, only for sessions for quick access and cleanup, change the value if 2 is already taken
-        'database' => env('REDIS_CACHE_DB', 2),
+        'port'     => env('REDIS_PORT', 6379),
+        'database' => env('REDIS_SESSION_DB', 2),
     ],
-  ]
-];
+],
 ```
 
-2. Update the .env file with the session driver and connection
+Using a separate database index keeps session keys isolated from cache and queue data, making it trivial to flush all sessions without affecting other Redis data.
 
-```sh
+**2. Update your `.env`:**
+
+```env
 SESSION_DRIVER=redis-session
 SESSION_CONNECTION=session
 ```
 
-If you have cached your config file, you might want to run `php artisan config:clear` and `php artisan config:cache` to revalidate the cache.
+If you have a cached config, clear it:
 
-## Usage
+```bash
+php artisan config:clear
+```
 
-Once you configure, the session data will be automatically stored in Redis cache with automatic validation. The stored session data has following properties in the cache.
+## Session Data Structure
 
-```ts
+Each session is stored as a JSON object with the following shape:
+
+```json
 {
-    "id": string, // session id
-    "user_id": number|string, // user id
-    "ip_address": null|string, // request ip address
-    "user_agent": string, // request user agent
-    "last_activty": number, // user's last request timestamp
-    "payload": string, // serialized/encrypted session data,
+    "user_id": 1,
+    "ip_address": "127.0.0.1",
+    "user_agent": "Mozilla/5.0 ...",
+    "last_activity": 1711234567,
+    "payload": "<base64-encoded session data>"
 }
 ```
 
-If you want to get the underlying handler of the session (`RedisSessionEnhancerHandler` instance) in your application code, you can use the `Illuminate\Support\Facades\Session::getHandler()`. Along with the required [Session Interface for Custom Drivers by Laravel](https://laravel.com/docs/session#implementing-the-driver), this helper provides `readAll` and `destroyAll` methods to work with stored sessions. This package also includes a helper to work with sessions.
+## Usage
 
 ### SessionHelper
 
-To retrieve the stored session data from the cache, you should use the `Craftsys\LaravelRedisSessionEnhanced\SessionHelper` class. This helper class also handles the `SESSION_DRIVER=database` driver so that you can easily switch between database and redis drivers as per your application needs, without changing the application code for sessions.
-
-The following helper functions are provided:
+`SessionHelper` abstracts over both the `redis-session` and `database` drivers, so you can switch between them without changing application code.
 
 ```php
-use Craftsys\LaravelRedisSessionEnhanced\SessionHelper;
+use PlayBaseOss\LaravelRedisSessionEnhanced\Support\SessionHelper;
 
-// 1. Show the active/all sessions of a User
-SessionHelper::getForUser($user_id) // get collection of all sessions of a user
-SessionHelper::getForUser($user_id, true) // get collection of all active sessions of a user
+// Get all sessions for a user
+SessionHelper::getForUser($userId);
 
-// 2. Remove all/other sessions of a user
-SessionHelper::deleteForUserExceptSession($user_id, [request()->session()->id]) // delete user's sessions except the current request
-SessionHelper::deleteForUserExceptSession($user_id) // delete all sessions of a user
+// Get only active sessions (within SESSION_LIFETIME)
+SessionHelper::getForUser($userId, only_active: true);
 
-// 3. Remove All sessions (can be used in a command to flush out all sessions by DevOps)
-SessionHelper::deleteAll() // delete all the sessions stored in database of every
+// Delete all sessions of a user except the current one
+SessionHelper::deleteForUserExceptSession($userId, request()->session()->id());
 
-// 4. Check if the application is configured with valid driver (database/redis).
-SessionHelper::isUsingValidDriver() // return true if using SESSION_DRIVER=database or SESSION_DRIVER=redis-session
+// Delete all sessions of a user
+SessionHelper::deleteForUserExceptSession($userId);
+
+// Delete all sessions (every user)
+SessionHelper::deleteAll();
+
+// Check if the application is using a supported driver
+SessionHelper::isUsingValidDriver(); // true for database or redis-session
 ```
 
+### Direct Handler Access
+
+You can resolve the underlying `RedisSessionEnhancerHandler` directly from the session facade:
+
+```php
+use PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler;
+
+/** @var RedisSessionEnhancerHandler $handler */
+$handler = Session::getHandler();
+
+// Get all sessions as a Collection of SessionData objects
+$sessions = $handler->readAll();
+
+// Flush all session data from Redis
+$handler->destroyAll();
+```
+
+### SessionData
+
+`readAll()` returns a `Collection` of `SessionData` objects:
+
+```php
+use PlayBaseOss\LaravelRedisSessionEnhanced\Session\SessionData;
+
+$session->id;            // string  — session ID
+$session->user_id;       // mixed   — authenticated user ID, or null
+$session->ip_address;    // string  — client IP address
+$session->user_agent;    // string  — client User-Agent (truncated to 500 chars)
+$session->last_activity; // int     — Unix timestamp of last activity
+$session->payload;       // string  — base64-encoded session payload
+```
+
+## Migrating from v1
+
+The package has been transferred to PlayBase-OSS. Update your `composer.json`:
+
+```bash
+composer remove craftsys/laravel-redis-session-enhanced
+composer require playbase-oss/laravel-redis-session-enhanced
+```
+
+Update any direct class references in your application:
+
+| v1 | v2 |
+|---|---|
+| `Craftsys\LaravelRedisSessionEnhanced\SessionHelper` | `PlayBaseOss\LaravelRedisSessionEnhanced\Support\SessionHelper` |
+| `Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancerHandler` | `PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler` |
+
+## License
+
+MIT

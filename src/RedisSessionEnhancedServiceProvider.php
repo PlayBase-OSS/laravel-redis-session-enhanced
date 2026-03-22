@@ -1,11 +1,12 @@
 <?php
 
-namespace Craftsys\LaravelRedisSessionEnhanced;
+namespace PlayBaseOss\LaravelRedisSessionEnhanced;
 
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Cache\Repository;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\ServiceProvider;
+use PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler;
 
 class RedisSessionEnhancedServiceProvider extends ServiceProvider
 {
@@ -38,6 +39,7 @@ class RedisSessionEnhancedServiceProvider extends ServiceProvider
 
     protected function createCacheStore(Application $app): Repository
     {
+        // Clone to avoid mutating the shared cache store instance when setting the connection.
         return clone $app->make('cache')->store(self::CACHE_DRIVER);
     }
 

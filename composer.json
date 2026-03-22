@@ -1,14 +1,20 @@
 {
-    "name": "craftsys/laravel-redis-session-enhanced",
+    "name": "playbase-oss/laravel-redis-session-enhanced",
     "description": "Enhanced redis driver for sessions in Laravel",
     "license": "MIT",
     "type": "library",
     "authors": [
         {
+            "name": "RikoDEV",
+            "email": "kontakt@riko.dev",
+            "role": "Developer",
+            "homepage": "https://riko.dev"
+        },
+        {
             "name": "Sudhir Mitharwal",
             "email": "luckysud4@gmail.com",
             "role": "Developer",
-            "homepage": "http://github.com/sudkumar"
+            "homepage": "https://github.com/sudkumar"
         }
     ],
     "keywords": [
@@ -17,18 +23,18 @@
         "session",
         "redis"
     ],
-    "homepage": "https://github.dev/RikoDEV/laravel-redis-session-enhanced",
+    "homepage": "https://github.com/PlayBase-OSS/laravel-redis-session-enhanced",
     "support": {
-        "issues": "https://github.dev/RikoDEV/laravel-redis-session-enhanced/issues",
-        "source": "https://github.dev/RikoDEV/laravel-redis-session-enhanced"
+        "issues": "https://github.com/PlayBase-OSS/laravel-redis-session-enhanced/issues",
+        "source": "https://github.com/PlayBase-OSS/laravel-redis-session-enhanced"
     },
     "require": {
-        "php": "^8.2|^8.3",
+        "php": "^8.2|^8.3|^8.4",
         "illuminate/support": "^11.0|^12.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^8.0|^9.0|^10.0",
-        "phpunit/phpunit": "^8.0|^9.4|^10.0|^11.0|^12.0"
+        "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
+        "phpunit/phpunit": "^8.0|^9.4|^10.0|^11.0|^12.5.8|^13.0.0"
     },
     "config": {
         "optimize-autoloader": true,
@@ -38,12 +44,12 @@
     "minimum-stability": "dev",
     "autoload": {
         "psr-4": {
-            "Craftsys\\LaravelRedisSessionEnhanced\\": "src/"
+            "PlayBaseOss\\LaravelRedisSessionEnhanced\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Craftsys\\Tests\\LaravelRedisSessionEnhanced\\": "tests/"
+            "PlayBaseOss\\Tests\\LaravelRedisSessionEnhanced\\": "tests/"
         }
     },
     "extra": {
@@ -52,7 +58,7 @@
         },
         "laravel": {
             "providers": [
-                "Craftsys\\LaravelRedisSessionEnhanced\\RedisSessionEnhancedServiceProvider"
+                "PlayBaseOss\\LaravelRedisSessionEnhanced\\RedisSessionEnhancedServiceProvider"
             ]
         }
     },

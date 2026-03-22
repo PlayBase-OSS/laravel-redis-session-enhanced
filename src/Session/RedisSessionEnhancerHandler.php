@@ -1,31 +1,21 @@
 <?php
 
-namespace Craftsys\LaravelRedisSessionEnhanced;
+namespace PlayBaseOss\LaravelRedisSessionEnhanced\Session;
 
-use Exception;
 use Illuminate\Cache\RedisStore;
+use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Auth\Guard;
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Redis\Connections\PhpRedisConnection;
+use Illuminate\Redis\Connections\PredisConnection;
 use Illuminate\Session\CacheBasedSessionHandler;
 use Illuminate\Session\ExistenceAwareInterface;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\InteractsWithTime;
-use Illuminate\Redis\Connections\PhpRedisConnection;
-use Illuminate\Redis\Connections\PredisConnection;
 use Illuminate\Support\Collection;
-
-readonly class SessionData
-{
-    public function __construct(
-        public string $id,
-        public mixed $user_id,
-        public string $ip_address,
-        public string $user_agent,
-        public int $last_activity,
-        public string $payload,
-    ) {}
-}
+use Illuminate\Support\InteractsWithTime;
+use JsonException;
 
 class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements ExistenceAwareInterface
 {
@@ -34,8 +24,8 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
     protected bool $exists = false;
 
     public function __construct(
-        $cache,
-        $minutes,
+        Repository $cache,
+        int $minutes,
         protected ?Container $container = null,
     ) {
         parent::__construct($cache, $minutes);
@@ -50,7 +40,7 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         }
 
         $session = $this->parseSessionData($rawData);
-        
+
         if ($session === null) {
             return '';
         }
@@ -72,19 +62,22 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
     {
         try {
             return json_decode($rawData, true, flags: JSON_THROW_ON_ERROR);
-        } catch (Exception) {
+        } catch (JsonException) {
             return null;
         }
     }
 
     protected function expired(array $session): bool
     {
-        return isset($session['last_activity']) 
+        return isset($session['last_activity'])
             && $session['last_activity'] < Carbon::now()
                 ->subMinutes($this->minutes)
                 ->getTimestamp();
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function write($sessionId, $data): bool
     {
         $payload = $this->getDefaultPayload($data);
@@ -98,6 +91,9 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         return $this->exists = true;
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function getDefaultPayload(string $data): array
     {
         $payload = [
@@ -115,6 +111,9 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         return $payload;
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function addUserInformation(array &$payload): void
     {
         if ($this->container?->bound(Guard::class)) {
@@ -122,11 +121,17 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         }
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function userId(): mixed
     {
         return $this->container?->make(Guard::class)->id();
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function addRequestInformation(array &$payload): void
     {
         if ($this->container?->bound('request')) {
@@ -135,14 +140,20 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         }
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function ipAddress(): ?string
     {
         return $this->container?->make('request')->ip();
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     protected function userAgent(): string
     {
-        return substr(
+        return mb_substr(
             (string) $this->container?->make('request')->header('User-Agent'),
             0,
             500
@@ -166,14 +177,14 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         /** @var RedisStore $store */
         $store = $this->cache->getStore();
         $connection = $store->connection();
-        
+
         $prefix = $this->getFullPrefix($connection, $store);
         $keys = $this->getSessionKeys($connection, $prefix);
         $data = $store->many($keys);
 
         return collect($data)
             ->filter()
-            ->map(fn(string $sessionData, string $sessionId) => 
+            ->map(fn(string $sessionData, string $sessionId) =>
                 $this->parseSessionObject($sessionId, $sessionData)
             )
             ->filter();
@@ -193,10 +204,10 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
     protected function getSessionKeys(mixed $connection, string $prefix): array
     {
         $keys = $connection->command('keys', ['*']);
-        
+
         return array_map(
-            fn(string $key) => str_replace($prefix, '', $key),
-            $keys
+            static fn(string $key) => str_replace($prefix, '', $key),
+            is_array($keys) ? $keys : []
         );
     }
 
@@ -204,7 +215,7 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
     {
         try {
             $parsed = json_decode($data, true, flags: JSON_THROW_ON_ERROR);
-            
+
             return new SessionData(
                 id: $sessionId,
                 user_id: $parsed['user_id'] ?? null,
@@ -213,14 +224,13 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
                 last_activity: $parsed['last_activity'] ?? 0,
                 payload: $parsed['payload'] ?? '',
             );
-        } catch (Exception) {
+        } catch (JsonException) {
             return null;
         }
     }
 
     public function destroyAll(): bool
     {
-        $store = $this->cache->getStore();
-        return $store->flush();
+        return $this->cache->getStore()->flush();
     }
 }

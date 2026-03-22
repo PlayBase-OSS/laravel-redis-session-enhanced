@@ -1,8 +1,8 @@
 <?php
 
-namespace Craftsys\Tests\LaravelRedisSessionEnhanced;
+namespace PlayBaseOss\Tests\LaravelRedisSessionEnhanced;
 
-use Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancerHandler;
+use PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler;
 use Illuminate\Support\Facades\Session;
 
 class DriverSetupTest extends TestCase
@@ -14,18 +14,18 @@ class DriverSetupTest extends TestCase
      *
      * @return void
      */
-    protected function getEnvironmentSetUp($app)
+    protected function getEnvironmentSetUp($app): void
     {
         $app['config']->set('session.driver', 'redis-session');
         $app['config']->set('session.connection', 'session');
     }
 
     /**
-     * Test that we have correct handler from container binding.
+     * Test that we have the correct handler from container binding.
      *
      * @return void
      */
-    public function testClientResolutionFromContainer()
+    public function testClientResolutionFromContainer(): void
     {
         $this->assertInstanceOf(RedisSessionEnhancerHandler::class, Session::getHandler());
     }

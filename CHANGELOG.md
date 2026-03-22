@@ -1,3 +1,26 @@
+## [2.0.0](https://github.com/PlayBase-OSS/laravel-redis-session-enhanced/compare/v1.0.5...v2.0.0) (2026-03-22)
+
+
+### Breaking Changes
+
+* **namespace:** package transferred to PlayBase-OSS; root namespace changed from `Craftsys\LaravelRedisSessionEnhanced` to `PlayBaseOss\LaravelRedisSessionEnhanced`
+* **namespace:** `SessionHelper` moved to `PlayBaseOss\LaravelRedisSessionEnhanced\Support\SessionHelper`
+* **namespace:** `SessionDriver` moved to `PlayBaseOss\LaravelRedisSessionEnhanced\Support\SessionDriver`
+* **namespace:** `RedisSessionEnhancerHandler` moved to `PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler`
+* **namespace:** `SessionData` extracted and moved to `PlayBaseOss\LaravelRedisSessionEnhanced\Session\SessionData`
+* **composer:** package renamed from `craftsys/laravel-redis-session-enhanced` to `playbase-oss/laravel-redis-session-enhanced`
+
+
+### Refactor
+
+* **structure:** split `src/` into `Session/` and `Support/` subdirectories
+* **handler:** add type hints to constructor (`Repository $cache`, `int $minutes`)
+* **handler:** catch `JsonException` instead of broad `Exception` in JSON parsing
+* **handler:** use `mb_substr` for safe multibyte User-Agent truncation
+* **handler:** guard Redis `keys` command result against non-array return
+* **service-provider:** document reason for cloning the cache store instance
+
+
 ## [1.0.5](https://github.com/craftsys/laravel-redis-session-enhanced/compare/v1.0.4...v1.0.5) (2024-04-25)
 
 

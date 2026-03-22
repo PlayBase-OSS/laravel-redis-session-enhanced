@@ -1,37 +1,20 @@
 <?php
 
-namespace Craftsys\LaravelRedisSessionEnhanced;
+namespace PlayBaseOss\LaravelRedisSessionEnhanced\Support;
 
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 
-enum SessionDriver: string
-{
-    case Database = 'database';
-    case Redis = 'redis-session';
-
-    public static function current(): ?self
-    {
-        return self::tryFrom(config('session.driver')) ?? null;
-    }
-
-    public function isValid(): bool
-    {
-        return match ($this) {
-            self::Database, self::Redis => true,
-        };
-    }
-}
-
 class SessionHelper
 {
     /**
      * Get all sessions for the given user ID
-     * 
-     * @param int|string $user_id ID/Key of the user, must match the ID used in sessions
+     *
+     * @param int|string $user_id ID/Key of the user must match the ID used in sessions
      * @param bool $only_active Get only active sessions
+     * @throws Exception
      */
     public static function getForUser(
         int|string $user_id,
@@ -56,16 +39,17 @@ class SessionHelper
 
     /**
      * Delete a user's sessions except the given session IDs
-     * 
+     *
      * @param int|string $user_id
      * @param string|array<string> $except_session_id Non-deletable session IDs, pass empty to delete all
+     * @throws Exception
      */
     public static function deleteForUserExceptSession(
         int|string $user_id,
         string|array $except_session_id = []
     ): void {
         $sessionIds = (array) $except_session_id;
-        
+
         self::getForUser($user_id)
             ->when(
                 $sessionIds !== [],
@@ -76,8 +60,9 @@ class SessionHelper
 
     /**
      * Get all sessions from the store
-     * 
+     *
      * @param null|int|string $user_id Optionally get all stored sessions of a particular user
+     * @throws Exception
      */
     public static function getAll(null|int|string $user_id = null): Collection
     {
@@ -103,7 +88,6 @@ class SessionHelper
 
     protected static function getAllFromRedis(null|int|string $user_id): Collection
     {
-        /** @var RedisDatabaseLikeSessionHandler $handler */
         $handler = Session::getHandler();
         $sessions = $handler->readAll();
 
@@ -114,6 +98,7 @@ class SessionHelper
 
     /**
      * Destroy all session data
+     * @throws Exception
      */
     public static function deleteAll(): void
     {
@@ -135,19 +120,8 @@ class SessionHelper
 
     protected static function deleteAllFromRedis(): void
     {
-        /** @var RedisDatabaseLikeSessionHandler $handler */
         $handler = Session::getHandler();
         $handler->destroyAll();
-    }
-
-    protected static function isUsingDatabaseDriver(): bool
-    {
-        return SessionDriver::current() === SessionDriver::Database;
-    }
-
-    protected static function isUsingRedisDatabaseDriver(): bool
-    {
-        return SessionDriver::current() === SessionDriver::Redis;
     }
 
     public static function isUsingValidDriver(): bool
@@ -156,7 +130,7 @@ class SessionHelper
     }
 
     /**
-     * Get the timestamp of last activity which results in an active session
+     * Get the timestamp of the last activity which results in an active session
      */
     public static function getTimestampOfLastActivityForActiveSession(): int
     {

@@ -1,9 +1,9 @@
 <?php
 
-namespace Craftsys\Tests\LaravelRedisSessionEnhanced;
+namespace PlayBaseOss\Tests\LaravelRedisSessionEnhanced;
 
 use Orchestra\Testbench\TestCase as BaseTestCase;
-use Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancedServiceProvider as ServiceProvider;
+use PlayBaseOss\LaravelRedisSessionEnhanced\RedisSessionEnhancedServiceProvider as ServiceProvider;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -14,7 +14,7 @@ abstract class TestCase extends BaseTestCase
      *
      * @return array
      */
-    protected function getPackageProviders($app)
+    protected function getPackageProviders($app): array
     {
         return [
             ServiceProvider::class,
