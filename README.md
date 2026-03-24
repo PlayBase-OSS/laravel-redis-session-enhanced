@@ -151,6 +151,9 @@ Update any direct class references in your application:
 | `Craftsys\LaravelRedisSessionEnhanced\SessionHelper` | `PlayBaseOss\LaravelRedisSessionEnhanced\Support\SessionHelper` |
 | `Craftsys\LaravelRedisSessionEnhanced\RedisSessionEnhancerHandler` | `PlayBaseOss\LaravelRedisSessionEnhanced\Session\RedisSessionEnhancerHandler` |
 
+# Credits
+- [Craftsys](https://github.com/craftsys/laravel-redis-session-enhanced)
+
 ## License
 
 MIT
