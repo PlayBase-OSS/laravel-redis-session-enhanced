@@ -15,13 +15,21 @@ class RedisSessionEnhancedServiceProvider extends ServiceProvider
     
     public function boot(): void
     {
+        // Laravel's Manager::extend() calls bindTo() on the callback, which rebinds $this
+        // to the Manager when given a regular or arrow closure. Using a static closure with
+        // an explicit reference to $this via use() prevents that rebinding, which would
+        // otherwise cause infinite recursion when the driver is first resolved.
+        $provider = $this;
+
         Session::extend(
             self::DRIVER_NAME,
-            fn(Application $app) => $this->createSessionHandler($app)
+            static function (Application $app) use ($provider) {
+                return $provider->createSessionHandler($app);
+            }
         );
     }
 
-    protected function createSessionHandler(Application $app): RedisSessionEnhancerHandler
+    public function createSessionHandler(Application $app): RedisSessionEnhancerHandler
     {
         $config = $app['config'];
         $cacheStore = $this->createCacheStore($app);

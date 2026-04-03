@@ -1,8 +1,15 @@
 <?xml version="1.0"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" colors="true" bootstrap="vendor/autoload.php" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd">
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         colors="true"
+         bootstrap="vendor/autoload.php"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.0/phpunit.xsd">
   <testsuites>
-    <testsuite name="unit">
+    <testsuite name="Unit">
+      <directory>./tests/Unit/</directory>
+    </testsuite>
+    <testsuite name="Feature">
       <directory>./tests/</directory>
+      <exclude>./tests/Unit/</exclude>
     </testsuite>
   </testsuites>
   <source>
