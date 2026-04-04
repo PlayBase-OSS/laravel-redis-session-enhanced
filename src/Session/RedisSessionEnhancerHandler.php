@@ -23,6 +23,8 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
 
     protected bool $exists = false;
 
+    protected static ?Collection $readAllCache = null;
+
     public function __construct(
         Repository $cache,
         int $minutes,
@@ -88,7 +90,16 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
 
         parent::write($sessionId, json_encode($payload));
 
+        static::$readAllCache = null;
+
         return $this->exists = true;
+    }
+
+    public function destroy($sessionId): bool
+    {
+        static::$readAllCache = null;
+
+        return parent::destroy($sessionId);
     }
 
     /**
@@ -174,6 +185,10 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
 
     public function readAll(): Collection
     {
+        if (static::$readAllCache !== null) {
+            return static::$readAllCache;
+        }
+
         /** @var RedisStore $store */
         $store = $this->cache->getStore();
         $connection = $store->connection();
@@ -182,7 +197,7 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
         $keys = $this->getSessionKeys($connection, $prefix);
         $data = $store->many($keys);
 
-        return collect($data)
+        return static::$readAllCache = collect($data)
             ->filter()
             ->map(fn(string $sessionData, string $sessionId) =>
                 $this->parseSessionObject($sessionId, $sessionData)
@@ -203,11 +218,28 @@ class RedisSessionEnhancerHandler extends CacheBasedSessionHandler implements Ex
 
     protected function getSessionKeys(mixed $connection, string $prefix): array
     {
-        $keys = $connection->command('keys', ['*']);
+        $keys = [];
+        $cursor = 0;
+
+        if ($connection instanceof PhpRedisConnection) {
+            while (false !== ($result = $connection->scan($cursor, ['match' => $prefix . '*', 'count' => 100]))) {
+                [$cursor, $batch] = $result;
+                if (is_array($batch)) {
+                    $keys = array_merge($keys, $batch);
+                }
+            }
+        } else {
+            do {
+                [$cursor, $batch] = $connection->scan($cursor, ['match' => $prefix . '*', 'count' => 100]);
+                if (is_array($batch)) {
+                    $keys = array_merge($keys, $batch);
+                }
+            } while ($cursor !== 0);
+        }
 
         return array_map(
             static fn(string $key) => str_replace($prefix, '', $key),
-            is_array($keys) ? $keys : []
+            $keys
         );
     }
 
